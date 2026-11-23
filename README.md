@@ -6,7 +6,7 @@
 
 ### Multi-Key Failover · Deterministic LRU Cache · Typed Questions · CLI & Native MCP Server
 
-**Turn NeoHorse JEV into a production decision layer — calibrated probabilities in ~50 ms, zero 401/429 downtime, zero redundant bills.**
+**Turn NeoHorse JEV into a production decision layer — explicit probability scores with a ~50 ms decision time, zero 401/403/429 downtime, zero redundant bills.**
 
 [![PyPI](https://img.shields.io/pypi/v/neohorse-kit?style=flat-square&color=3776AB&logo=pypi&logoColor=white)](https://pypi.org/project/neohorse-kit/)
 [![Python](https://img.shields.io/pypi/pyversions/neohorse-kit?style=flat-square&logo=python&logoColor=white)](https://pypi.org/project/neohorse-kit/)
@@ -32,7 +32,7 @@
 
 ## Understand neohorse-kit in 3 Seconds
 
-When agents route tickets, moderate content, triage reports, or take branch actions, chat LLMs are **slow, token-hungry, and their confidence scores are uncalibrated**. A decision model exists precisely for this: [基元律动 Token Rhythm](https://tokenrhythm.studio)'s **NeoHorse JEV 4B** answers structured questions with **calibrated probabilities in ~50 ms** (`decision_seconds` on every response).
+When agents route tickets, moderate content, triage reports, or take branch actions, chat LLMs are **slow, token-hungry, and their confidence scores are not real probabilities**. A decision model exists precisely for this: [基元律动 Token Rhythm](https://tokenrhythm.studio)'s **NeoHorse JEV 4B** answers structured questions with an **explicit probability distribution** (top-level `decision_seconds` ≈ 50 ms on `/v1/decision`).
 
 **However, running JEV in production or agent loops introduces real operational friction:**
 
@@ -44,7 +44,7 @@ When agents route tickets, moderate content, triage reports, or take branch acti
 **`neohorse-kit` is the production operations layer for JEV:**
 
 * 🔑 **Multi-key pool & zero-downtime failover**: 401/403 (dead key or missing grayscale) and 429 (capacity) hot-swap to the next key mid-request.
-* ⚡ **Deterministic LRU cache**: identical requests (same `model` + `state` + `questions` + `image`) are served from memory in microseconds at $0 upstream cost.
+* ⚡ **Deterministic LRU cache**: identical requests (same `model` + `state` + `questions` + `image`) are served from memory in ~0.1 ms at $0 upstream cost.
 * 📦 **1..16 questions in ONE round trip**: batch urgency, severity, routing and risk into a single HTTP payload.
 * 🖼️ **Image questions**: attach one PNG per call — pass bytes or a path, the kit builds the data URL and enforces the one-question rule.
 * 📐 **Protocol guards**: documented limits are checked client-side with actionable errors before a request is spent.
@@ -75,7 +75,7 @@ from neohorse_kit import NeoHorseClient, presets
 # Defaults to NeoHorse-Jev-4B on /v1/decision, loads the NEOHORSE_API_KEYS pool
 client = NeoHorseClient()
 
-# ① Binary question -> calibrated probability of YES
+# ① Binary question -> probability of YES (0..1)
 res = client.decide("路口信号灯为红色，前方有行人。", presets.urgency())
 print(f"Urgency probability: {res.answers['is_urgent'].noul:.4f}")
 # e.g. 0.9896
@@ -138,7 +138,7 @@ neohorse-kit --models
 ```text
 Your code ──► neohorse-kit ──► key pool rotation + retry/backoff ──► https://tokenrhythm.studio/v1
                 │
-                ├─ LRU cache (sha256 of the full payload)  ── hit? return in µs, $0
+                ├─ LRU cache (sha256 of the full payload)  ── hit? return in ~0.1 ms, $0
                 ├─ protocol guards (1..16 questions, image rules, body caps)
                 └─ per-key usage metering
 ```
@@ -162,8 +162,8 @@ JEV answers are deterministic for identical input, so the kit caches by a
 sha256 of the canonical request payload (image data URL included):
 
 ```text
-First call:     ~800-2000 ms  (upstream round trip + ~50 ms decision; billed once)
-Second call:       < 0.1 ms   (memory hit, $0 cost)
+First call:     ~300-400 ms  (network round trip + ~50 ms decision; billed once)
+Second call:      ~0.1 ms    (memory hit, $0 cost)
 ```
 
 > Pass `cache_size=0` (Python) or `--no-cache` (CLI) to force fresh calls.
@@ -172,7 +172,7 @@ Second call:       < 0.1 ms   (memory hit, $0 cost)
 
 ## Three Question Types
 
-JEV answers with calibrated probabilities across three question models:
+JEV answers with explicit probability distributions across three question models:
 
 ```mermaid
 flowchart LR
@@ -220,7 +220,7 @@ print(ans.probabilities)  # {'0': 0.05, '1': 0.27, '2': 0.55, '3': 0.13}
 ```
 
 > [!TIP]
-> **Calibrated probabilities are not verdicts**: pick your own thresholds to match your SLA — `noul > 0.85` auto-escalate, `0.50..0.85` human review, `< 0.50` automated handling.
+> **Probabilities are not verdicts — and not correctness rates**: the platform docs say explicitly that the scores and `confidence` are *not* calibrated correctness rates. Pick your own thresholds to match your SLA — `noul > 0.85` auto-escalate, `0.50..0.85` human review, `< 0.50` automated handling.
 
 ---
 

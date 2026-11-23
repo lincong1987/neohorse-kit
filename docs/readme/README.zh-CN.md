@@ -4,7 +4,7 @@
 
 ### 多密钥故障转移 · 确定性 LRU 缓存 · 题型化封装 · CLI 与原生 MCP Server
 
-**把 NeoHorse JEV 变成生产可用的决策层——约 50ms 返回校准概率，401/403/429 零停机，重复请求零重复计费。**
+**把 NeoHorse JEV 变成生产可用的决策层——约 50ms 决策返回显式概率分数，401/403/429 零停机，重复请求零重复计费。**
 
 [![PyPI](https://img.shields.io/pypi/v/neohorse-kit?style=flat-square&color=3776AB&logo=pypi&logoColor=white)](https://pypi.org/project/neohorse-kit/)
 [![Python](https://img.shields.io/pypi/pyversions/neohorse-kit?style=flat-square&logo=python&logoColor=white)](https://pypi.org/project/neohorse-kit/)
@@ -30,7 +30,7 @@
 
 ## 三秒看懂 neohorse-kit
 
-Agent 要分流工单、审核内容、定级报告、做分支决策时，聊天大模型**又慢又费 token，输出的置信度也没有校准**。基元律动的 **NeoHorse JEV 4B** 正是为此而生的结构化决策模型：一次请求批量回答最多 16 个问题，约 50ms（响应里的 `decision_seconds`）返回**校准概率**。
+Agent 要分流工单、审核内容、定级报告、做分支决策时，聊天大模型**又慢又费 token，它给的置信度也不是真正的概率**。基元律动的 **NeoHorse JEV 4B** 正是为此而生的结构化决策模型：一次请求批量回答最多 16 个问题，约 50ms（`/v1/decision` 响应顶层的 `decision_seconds`）返回**显式的概率分布**。
 
 **但在生产或 Agent 循环里直接用 JEV，有几个真实的运维坑：**
 
@@ -42,7 +42,7 @@ Agent 要分流工单、审核内容、定级报告、做分支决策时，聊�
 **`neohorse-kit` 就是 JEV 的生产运维层：**
 
 * 🔑 **多密钥池与零停机故障转移**：401/403（死密钥或无灰度权限）和 429（容量限流）在请求内热切换到下一个密钥；
-* ⚡ **确定性 LRU 缓存**：相同输入（`model` + `state` + `questions` + `image`）直接命中内存，微秒级返回、$0 上游成本；
+* ⚡ **确定性 LRU 缓存**：相同输入（`model` + `state` + `questions` + `image`）直接命中内存，约 0.1ms 返回、$0 上游成本；
 * 📦 **一次往返批量 1..16 题**：紧急度、严重度、路由、风险一个 HTTP 负载全答完；
 * 🖼️ **图片题**：每次调用可附一张 PNG——传字节或路径即可，kit 负责转 Data URL 并强制“一题”规则；
 * 📐 **协议护栏**：文档化的限制在花费请求之前本地校验，报错带可执行信息；
@@ -73,7 +73,7 @@ from neohorse_kit import NeoHorseClient, presets
 # 默认 NeoHorse-Jev-4B + /v1/decision，自动读取 NEOHORSE_API_KEYS 池
 client = NeoHorseClient()
 
-# ① 是非题 -> “是”的校准概率
+# ① 是非题 -> “是”的概率（0..1）
 res = client.decide("路口信号灯为红色，前方有行人。", presets.urgency())
 print(f"紧急度概率: {res.answers['is_urgent'].noul:.4f}")   # 例如 0.9896
 
@@ -134,7 +134,7 @@ neohorse-kit --models
 ```text
 你的代码 ──► neohorse-kit ──► 密钥轮换 + 重试退避 ──► https://tokenrhythm.studio/v1
                 │
-                ├─ LRU 缓存（整个 payload 的 sha256）── 命中？微秒返回，$0
+                ├─ LRU 缓存（整个 payload 的 sha256）── 命中？≈0.1ms 返回，$0
                 ├─ 协议护栏（1..16 题、带图一题、请求体上限）
                 └─ 分密钥用量计量
 ```
@@ -157,8 +157,8 @@ neohorse-kit --models
 JEV 对相同输入的回答是确定性的，因此 kit 以规范化请求体（含图片 Data URL）的 sha256 为键做缓存：
 
 ```text
-首次调用：   ~800-2000 ms（上游往返 + ~50 ms 决策；计费一次）
-缓存命中：      < 0.1 ms（内存命中，$0）
+首次调用：   ~300-400 ms（网络往返 + ~50 ms 决策；计费一次）
+缓存命中：      ≈ 0.1 ms（内存命中，$0）
 ```
 
 > 需要强制走网络时：Python 传 `cache_size=0`，CLI 加 `--no-cache`。
@@ -167,7 +167,7 @@ JEV 对相同输入的回答是确定性的，因此 kit 以规范化请求体�
 
 ## 三种题型
 
-JEV 用校准概率回答三类问题：
+JEV 用显式的概率分布回答三类问题：
 
 ```mermaid
 flowchart LR
@@ -215,7 +215,7 @@ print(ans.probabilities)  # {'0': 0.05, '1': 0.27, '2': 0.55, '3': 0.13}
 ```
 
 > [!TIP]
-> **校准概率不是判决书**：按自己的 SLA 设阈值——`noul > 0.85` 自动升级，`0.50..0.85` 转人工，`< 0.50` 自动处理。
+> **概率不是判决书，也不是正确率**：平台文档明确说明这些分数和 `confidence` **不是**校准过的正确率。按自己的 SLA 设阈值——`noul > 0.85` 自动升级，`0.50..0.85` 转人工，`< 0.50` 自动处理。
 
 ---
 

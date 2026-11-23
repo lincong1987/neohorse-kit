@@ -35,7 +35,7 @@ def _json(value: Any) -> str:
 
 @mcp.tool()
 def decide(state: Any, questions: dict[str, Any], endpoint: str = "decision") -> str:
-    """Judge text or JSON data with the NeoHorse JEV decision model, calibrated probabilities out.
+    """Judge text or JSON data with the NeoHorse JEV decision model, probability scores out.
 
     Args:
         state: the text — or any JSON value — under judgement.

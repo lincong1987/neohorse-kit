@@ -32,7 +32,7 @@ def noul(
     """Binary question scored 0..1 (e.g. "Does this convey urgency?").
 
     ``true``/``false`` optionally describe what each outcome means, which
-    sharpens calibration.
+    sharpens the score.
     """
     criteria = NoulCriteria(true=true, false=false) if (true or false) else None
     return Noul(name=name, instructions=question, criteria=criteria)

@@ -1,8 +1,11 @@
 """Client for the NeoHorse JEV decision API (Token Rhythm).
 
 JEV is a structured *decision* model — not a chat model. You send a ``state``
-(background or content under judgement) plus 1..16 questions and get calibrated
-answers back in one round trip. Two endpoints accept the same request body:
+(background or content under judgement) plus 1..16 questions and get
+probability-scored answers back in one round trip. The scores are an explicit
+distribution over outcomes, but — per the platform docs — *not* calibrated
+correctness rates: pick your own thresholds. Two endpoints accept the same
+request body:
 
 - ``POST /v1/decision`` (recommended): answers plus top-level ``input_tokens``
   / ``input_details`` / ``decision_seconds``.

@@ -1,7 +1,7 @@
 ---
 name: neohorse-kit
 description: Judge text or JSON with the NeoHorse JEV decision API (Token
-  Rhythm) — calibrated yes/no scores (noul), label routing (choice), ordered
+  Rhythm) — probability-based yes/no scores (noul), label routing (choice), ordered
   ratings (score), and single-question PNG image judging; presets for
   urgency/sentiment/severity/priority. Use when scoring, routing, triaging,
   grading or deciding on text, JSON records, or one image.
@@ -74,10 +74,11 @@ System One compatible response shape.
 
 ## Reading results
 
-Probabilities are calibrated, not verdicts: pick a threshold (e.g. `noul > 0.8`
-means act) instead of trusting a single answer blindly. `usage` differs by
-endpoint: `/v1/decision` reports packed `input_tokens`; `/v1/systemone`
-reports `usage.input_tokens` / `usage.output_tokens`.
+Probabilities are not verdicts, and the platform docs say explicitly they are
+not calibrated correctness rates: pick a threshold that suits the task (e.g.
+`noul > 0.8` means act) instead of trusting a single answer blindly.
+`/v1/decision` reports packed `input_tokens`; `/v1/systemone` reports
+`usage.input_tokens` / `usage.output_tokens`.
 
 ## Cost care
 
